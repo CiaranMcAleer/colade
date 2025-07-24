@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/CiaranMcAleer/colade/internal/sitegen"
 )
 
 var version = "dev" // Version set during build with go build -ldflags "-X main.version=1.2.3"
@@ -24,7 +26,10 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			inputDir := args[0]
 			outputDir := args[1]
-			fmt.Printf("[Scaffold] Would build site from '%s' to '%s'...\n", inputDir, outputDir)
+			if err := sitegen.BuildSite(inputDir, outputDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 		},
 	}
 
