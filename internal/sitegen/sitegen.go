@@ -6,6 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"bytes"
+	"strings"
+	"time"
+	"github.com/yuin/goldmark"
 )
 
 func BuildSite(inputDir, outputDir string) error {
@@ -26,22 +30,33 @@ func BuildSite(inputDir, outputDir string) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	fmt.Printf("[Stub] Building site from '%s' to '%s'...\n", inputDir, outputDir)
+	startTime := time.Now()// Used to measure build time
+	fmt.Printf("[Build] Starting site build from '%s' to '%s'...\n", inputDir, outputDir)
 
 	var markdownFiles []string
 	var assetFiles []string
 
-	// Traverse the input directory to find markdown and asset files(mostly images)
+	// Traverse the input directory to find markdown and asset files (skip hidden files/dirs)
 	err = filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			return nil
-		}
 		relPath, err := filepath.Rel(inputDir, path)
 		if err != nil {
 			return err
+		}
+		// Skip hidden files and directories
+		parts := strings.Split(relPath, string(os.PathSeparator))
+		for _, part := range parts {
+			if strings.HasPrefix(part, ".") {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+		}
+		if info.IsDir() {
+			return nil
 		}
 		ext := filepath.Ext(info.Name())
 		switch ext {
@@ -56,25 +71,68 @@ func BuildSite(inputDir, outputDir string) error {
 		return fmt.Errorf("error walking input directory: %w", err)
 	}
 
-	fmt.Printf("Found %d markdown files and %d asset files.\n", len(markdownFiles), len(assetFiles))
+	fmt.Printf("[Build] Found %d markdown files and %d asset files.\n", len(markdownFiles), len(assetFiles))
 	for _, f := range markdownFiles {
-		fmt.Printf("  [Markdown] %s\n", f)
+		fmt.Printf("    [Markdown] %s\n", f)
 	}
 	for _, f := range assetFiles {
-		fmt.Printf("  [Asset] %s\n", f)
+		fmt.Printf("    [Asset] %s\n", f)
 	}
 
-	// Copy asset files to output directory, preserving relative paths
-	// TODO add tests for asset copying functionality 
+	// Copy asset files to output directory, preserving relative paths, TODO add tests for this
 	for _, relPath := range assetFiles {
 		src := filepath.Join(inputDir, relPath)
 		dst := filepath.Join(outputDir, relPath)
+		opStart := time.Now()
+		fmt.Printf("[Copy]   %s -> %s\n", relPath, dst)
 		if err := copyFilePreserveDirs(src, dst); err != nil {
 			return fmt.Errorf("failed to copy asset '%s': %w", relPath, err)
 		}
+		fmt.Printf("[Copy]   Done in %v\n", time.Since(opStart))
 	}
 
+	// Convert markdown files to HTML and write to output directory
+	md := goldmark.New()
+	for _, relPath := range markdownFiles {
+		src := filepath.Join(inputDir, relPath)
+		dst := filepath.Join(outputDir, relPath)
+		dst = dst[:len(dst)-len(filepath.Ext(dst))] + ".html"
+		opStart := time.Now()
+		fmt.Printf("[Build]  %s -> %s\n", relPath, dst)
+
+		// Future-proof: parseMarkdownFile for frontmatter support(in future we will incorporate frontmatter for things like dates etc.)
+		content, err := parseMarkdownFile(src)
+		if err != nil {
+			return fmt.Errorf("failed to read markdown file '%s': %w", relPath, err)
+		}
+		var buf bytes.Buffer
+		if err := md.Convert(content, &buf); err != nil {
+			return fmt.Errorf("failed to convert markdown '%s': %w", relPath, err)
+		}
+		// Future-proof: renderHTMLPage for templating support(Similar to frontmatter, we will incorporate templating in future)
+		htmlOut := renderHTMLPage(buf.Bytes())
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return fmt.Errorf("failed to create output dir for '%s': %w", relPath, err)
+		}
+		if err := os.WriteFile(dst, htmlOut, 0644); err != nil {
+			return fmt.Errorf("failed to write HTML file '%s': %w", relPath, err)
+		}
+		fmt.Printf("[Build]  Done in %v\n", time.Since(opStart))
+	}
+
+	fmt.Printf("[Build] Site build complete in %v.\n", time.Since(startTime))
 	return nil
+}
+
+// parseMarkdownFile is a future-proof extension point for frontmatter support.
+func parseMarkdownFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
+// renderHTMLPage is a future-proof extension point for templating support.
+func renderHTMLPage(html []byte) []byte {
+	// For now, just return the HTML as-is.
+	return html
 }
 
 // copyFilePreserveDirs copies a file from src to dst, creating parent directories as needed.
