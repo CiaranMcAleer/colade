@@ -3,10 +3,10 @@ package sitegen
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
-
 
 func BuildSite(inputDir, outputDir string) error {
 	// Check if input directory exists
@@ -57,7 +57,6 @@ func BuildSite(inputDir, outputDir string) error {
 	}
 
 	fmt.Printf("Found %d markdown files and %d asset files.\n", len(markdownFiles), len(assetFiles))
-	// TODO For now, just print the files. In the future, parse/copy as needed.
 	for _, f := range markdownFiles {
 		fmt.Printf("  [Markdown] %s\n", f)
 	}
@@ -65,5 +64,41 @@ func BuildSite(inputDir, outputDir string) error {
 		fmt.Printf("  [Asset] %s\n", f)
 	}
 
+	// Copy asset files to output directory, preserving relative paths
+	// TODO add tests for asset copying functionality 
+	for _, relPath := range assetFiles {
+		src := filepath.Join(inputDir, relPath)
+		dst := filepath.Join(outputDir, relPath)
+		if err := copyFilePreserveDirs(src, dst); err != nil {
+			return fmt.Errorf("failed to copy asset '%s': %w", relPath, err)
+		}
+	}
+
+	return nil
+}
+
+// copyFilePreserveDirs copies a file from src to dst, creating parent directories as needed.
+func copyFilePreserveDirs(src, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cerr := out.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
 	return nil
 }
