@@ -2,13 +2,14 @@
 package sitegen
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"bytes"
 	"strings"
 	"time"
+
 	"github.com/yuin/goldmark"
 )
 
@@ -30,7 +31,7 @@ func BuildSite(inputDir, outputDir string) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	startTime := time.Now()// Used to measure build time
+	startTime := time.Now() // Used to measure build time
 	fmt.Printf("[Build] Starting site build from '%s' to '%s'...\n", inputDir, outputDir)
 
 	var markdownFiles []string
@@ -46,13 +47,16 @@ func BuildSite(inputDir, outputDir string) error {
 			return err
 		}
 		// Skip hidden files and directories
-		parts := strings.Split(relPath, string(os.PathSeparator))
-		for _, part := range parts {
-			if strings.HasPrefix(part, ".") {
-				if info.IsDir() {
-					return filepath.SkipDir
+		if relPath != "." {
+			// Use filepath.Dir and filepath.Base for better cross-platform handling
+			parts := strings.Split(filepath.ToSlash(relPath), "/")
+			for _, part := range parts {
+				if strings.HasPrefix(part, ".") {
+					if info.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
 				}
-				return nil
 			}
 		}
 		if info.IsDir() {
@@ -100,7 +104,6 @@ func BuildSite(inputDir, outputDir string) error {
 		opStart := time.Now()
 		fmt.Printf("[Build]  %s -> %s\n", relPath, dst)
 
-		// Future-proof: parseMarkdownFile for frontmatter support(in future we will incorporate frontmatter for things like dates etc.)
 		content, err := parseMarkdownFile(src)
 		if err != nil {
 			return fmt.Errorf("failed to read markdown file '%s': %w", relPath, err)
@@ -109,7 +112,6 @@ func BuildSite(inputDir, outputDir string) error {
 		if err := md.Convert(content, &buf); err != nil {
 			return fmt.Errorf("failed to convert markdown '%s': %w", relPath, err)
 		}
-		// Future-proof: renderHTMLPage for templating support(Similar to frontmatter, we will incorporate templating in future)
 		htmlOut := renderHTMLPage(buf.Bytes())
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			return fmt.Errorf("failed to create output dir for '%s': %w", relPath, err)
