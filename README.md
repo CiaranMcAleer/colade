@@ -7,3 +7,4 @@ Features:
 - Fast(like really fast)
 - No lock in, uses standard markdown files, you can use any markdown editor you like and generate a website with colade.
 - Simple and easy to use CLI
+- Aims to keep page size small(<14kb compressed) based on https://news.ycombinator.com/item?id=44613625

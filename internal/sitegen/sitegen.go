@@ -97,6 +97,7 @@ func BuildSite(inputDir, outputDir string) error {
 
 	// Convert markdown files to HTML and write to output directory
 	md := goldmark.New()
+	sizeOut := make(chan string, len(markdownFiles))
 	for _, relPath := range markdownFiles {
 		src := filepath.Join(inputDir, relPath)
 		dst := filepath.Join(outputDir, relPath)
@@ -119,7 +120,12 @@ func BuildSite(inputDir, outputDir string) error {
 		if err := os.WriteFile(dst, htmlOut, 0644); err != nil {
 			return fmt.Errorf("failed to write HTML file '%s': %w", relPath, err)
 		}
+		CheckGzipSize(dst, 14*1024, sizeOut)
 		fmt.Printf("[Build]  Done in %v\n", time.Since(opStart))
+	}
+	// Print all size check results(doing it this way to avoid slowing down the build process)
+	for i := 0; i < len(markdownFiles); i++ {
+		fmt.Fprint(os.Stderr, <-sizeOut)
 	}
 
 	fmt.Printf("[Build] Site build complete in %v.\n", time.Since(startTime))
