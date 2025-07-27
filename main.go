@@ -26,12 +26,14 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			inputDir := args[0]
 			outputDir := args[1]
-			if err := sitegen.BuildSite(inputDir, outputDir); err != nil {
+			threshold, _ := cmd.Flags().GetInt("size-threshold")
+			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
 		},
 	}
+	buildCmd.Flags().IntP("size-threshold", "s", 14, "Size threshold in KB for gzip compression warnings")
 
 	rootCmd.AddCommand(buildCmd)
 

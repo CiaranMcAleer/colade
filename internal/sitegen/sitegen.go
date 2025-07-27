@@ -13,7 +13,7 @@ import (
 	"github.com/yuin/goldmark"
 )
 
-func BuildSite(inputDir, outputDir string) error {
+func BuildSite(inputDir, outputDir string, sizeThreshold int) error {
 	// Check if input directory exists
 	info, err := os.Stat(inputDir)
 	if err != nil {
@@ -120,7 +120,7 @@ func BuildSite(inputDir, outputDir string) error {
 		if err := os.WriteFile(dst, htmlOut, 0644); err != nil {
 			return fmt.Errorf("failed to write HTML file '%s': %w", relPath, err)
 		}
-		CheckGzipSize(dst, 14*1024, sizeOut)
+		CheckGzipSize(dst, sizeThreshold, sizeOut)
 		fmt.Printf("[Build]  Done in %v\n", time.Since(opStart))
 	}
 	// Print all size check results(doing it this way to avoid slowing down the build process)
