@@ -11,8 +11,17 @@ import (
 )
 
 var version = "dev" // Version set during build with go build -ldflags "-X main.version=1.2.3"
+var coladeAscii = `
+ ██████╗ ██████╗ ██╗      █████╗ ██████╗ ███████╗
+██╔════╝██╔═══██╗██║     ██╔══██╗██╔══██╗██╔════╝
+██║     ██║   ██║██║     ███████║██║  ██║█████╗  
+██║     ██║   ██║██║     ██╔══██║██║  ██║██╔══╝  
+╚██████╗╚██████╔╝███████╗██║  ██║██████╔╝███████╗
+ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
+`
 
 func main() {
+	fmt.Print(coladeAscii)
 	rootCmd := &cobra.Command{
 		Use:   "colade",
 		Short: "Colade - Static site generator from Markdown",
@@ -48,13 +57,15 @@ func main() {
 				fmt.Fprintf(os.Stderr, "Error: '%s' is not a valid directory\n", dir)
 				os.Exit(1)
 			}
-			err = sitegen.ServeDir(dir)
+			port, _ := cmd.Flags().GetInt("port")
+			err = sitegen.ServeDir(dir, port)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
 		},
 	}
+	serveCmd.Flags().IntP("port", "p", 8080, "Port to serve on (default 8080)")
 	rootCmd.AddCommand(serveCmd)
 
 	rootCmd.AddCommand(&cobra.Command{

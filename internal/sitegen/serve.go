@@ -5,10 +5,10 @@ import (
 	"net/http"
 )
 
-// ServeDir starts a local web server to serve static files from the given directory. This allows users to preview their site locally.
-func ServeDir(dir string) error {
+func ServeDir(dir string, port int) error {
 	handler := http.FileServer(http.Dir(dir))
-	fmt.Printf("Serving '%s' at http://localhost:8080\n", dir)
+	fmt.Printf("Serving '%s' at http://localhost:%d\n", dir, port)
 	fmt.Println("Press Ctrl+C to stop.")
-	return http.ListenAndServe(":8080", handler)
+	addr := fmt.Sprintf(":%d", port)
+	return http.ListenAndServe(addr, handler)
 }
