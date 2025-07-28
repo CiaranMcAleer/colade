@@ -36,13 +36,15 @@ func main() {
 			inputDir := args[0]
 			outputDir := args[1]
 			threshold, _ := cmd.Flags().GetInt("size-threshold")
-			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024); err != nil {
+			noIncremental, _ := cmd.Flags().GetBool("no-incremental")
+			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024, noIncremental); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
 		},
 	}
 	buildCmd.Flags().IntP("size-threshold", "s", 14, "Size threshold in KB for gzip compression warnings")
+	buildCmd.Flags().Bool("no-incremental", false, "Disable incremental build and force full rebuild")
 
 	rootCmd.AddCommand(buildCmd)
 

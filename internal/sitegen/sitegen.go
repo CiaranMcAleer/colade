@@ -10,10 +10,46 @@ import (
 	"strings"
 	"time"
 
+	"encoding/json"
+
 	"github.com/yuin/goldmark"
 )
 
-func BuildSite(inputDir, outputDir string, sizeThreshold int) error {
+type cacheFile struct {
+	Version int                       `json:"version"`
+	Files   map[string]cacheFileEntry `json:"files"`
+}
+
+type cacheFileEntry struct {
+	Mtime  int64  `json:"mtime"`
+	Output string `json:"output"`
+}
+
+func loadCache(path string) (*cacheFile, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var c cacheFile
+	if err := json.NewDecoder(f).Decode(&c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func saveCache(path string, c *cacheFile) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	return enc.Encode(c)
+}
+
+func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool) error {
 	// Check if input directory exists
 	info, err := os.Stat(inputDir)
 	if err != nil {
@@ -33,6 +69,20 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int) error {
 
 	startTime := time.Now() // Used to measure build time
 	fmt.Printf("[Build] Starting site build from '%s' to '%s'...\n", inputDir, outputDir)
+
+	cachePath := filepath.Join(outputDir, ".colade-cache")
+	var cache *cacheFile
+	useIncremental := !noIncremental
+	if useIncremental {
+		c, err := loadCache(cachePath)
+		if err == nil && c.Version == 1 {
+			cache = c
+			fmt.Printf("[Build] Loaded cache from %s\n", cachePath)
+		} else {
+			fmt.Printf("[Build] No valid cache found, doing full rebuild\n")
+			useIncremental = false
+		}
+	}
 
 	var markdownFiles []string
 	var assetFiles []string
@@ -82,8 +132,92 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int) error {
 	for _, f := range assetFiles {
 		fmt.Printf("    [Asset] %s\n", f)
 	}
+	if useIncremental && cache != nil {
+		md := goldmark.New()
+		sizeOut := make(chan string, len(markdownFiles))
+		newCache := &cacheFile{Version: 1, Files: make(map[string]cacheFileEntry)}
 
-	// Copy asset files to output directory, preserving relative paths, TODO add tests for this
+		getMtime := func(path string) int64 {
+			info, err := os.Stat(path)
+			if err != nil {
+				return 0
+			}
+			return info.ModTime().Unix()
+		}
+
+		seen := make(map[string]bool)
+
+		for _, relPath := range markdownFiles {
+			src := filepath.Join(inputDir, relPath)
+			dst := filepath.Join(outputDir, relPath)
+			dst = dst[:len(dst)-len(filepath.Ext(dst))] + ".html"
+			mtime := getMtime(src)
+			seen[relPath] = true
+
+			prev, ok := cache.Files[relPath]
+			if !ok || prev.Mtime != mtime {
+				fmt.Printf("[IncBuild] %s -> %s (changed/new)\n", relPath, dst)
+				content, err := parseMarkdownFile(src)
+				if err != nil {
+					return fmt.Errorf("failed to read markdown file '%s': %w", relPath, err)
+				}
+				var buf bytes.Buffer
+				if err := md.Convert(content, &buf); err != nil {
+					return fmt.Errorf("failed to convert markdown '%s': %w", relPath, err)
+				}
+				htmlOut := renderHTMLPage(buf.Bytes())
+				if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+					return fmt.Errorf("failed to create output dir for '%s': %w", relPath, err)
+				}
+				if err := os.WriteFile(dst, htmlOut, 0644); err != nil {
+					return fmt.Errorf("failed to write HTML file '%s': %w", relPath, err)
+				}
+				CheckGzipSize(dst, sizeThreshold, sizeOut)
+			} else {
+				fmt.Printf("[IncBuild] %s unchanged, skipping\n", relPath)
+				sizeOut <- ""
+			}
+			newCache.Files[relPath] = cacheFileEntry{Mtime: mtime, Output: dst[len(outputDir)+1:]}
+		}
+
+		for _, relPath := range assetFiles {
+			src := filepath.Join(inputDir, relPath)
+			dst := filepath.Join(outputDir, relPath)
+			mtime := getMtime(src)
+			seen[relPath] = true
+
+			prev, ok := cache.Files[relPath]
+			if !ok || prev.Mtime != mtime {
+				fmt.Printf("[IncCopy] %s -> %s (changed/new)\n", relPath, dst)
+				if err := copyFilePreserveDirs(src, dst); err != nil {
+					return fmt.Errorf("failed to copy asset '%s': %w", relPath, err)
+				}
+			} else {
+				fmt.Printf("[IncCopy] %s unchanged, skipping\n", relPath)
+			}
+			newCache.Files[relPath] = cacheFileEntry{Mtime: mtime, Output: dst[len(outputDir)+1:]}
+		}
+
+		for relPath, entry := range cache.Files {
+			if !seen[relPath] {
+				outPath := filepath.Join(outputDir, entry.Output)
+				fmt.Printf("[IncRemove] %s (deleted from input, removing %s)\n", relPath, outPath)
+				os.Remove(outPath)
+			}
+		}
+
+		for i := 0; i < len(markdownFiles); i++ {
+			fmt.Fprint(os.Stderr, <-sizeOut)
+		}
+
+		if err := saveCache(cachePath, newCache); err != nil {
+			return fmt.Errorf("failed to save cache: %w", err)
+		}
+
+		fmt.Printf("[Build] Incremental build complete in %v.\n", time.Since(startTime))
+		return nil
+	}
+
 	for _, relPath := range assetFiles {
 		src := filepath.Join(inputDir, relPath)
 		dst := filepath.Join(outputDir, relPath)
@@ -126,6 +260,70 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int) error {
 	// Print all size check results(doing it this way to avoid slowing down the build process)
 	for i := 0; i < len(markdownFiles); i++ {
 		fmt.Fprint(os.Stderr, <-sizeOut)
+	}
+
+	filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		relPath, err := filepath.Rel(outputDir, path)
+		if err != nil || relPath == "." {
+			return nil
+		}
+		if relPath == ".colade-cache" || strings.HasPrefix(info.Name(), ".") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		expected := false
+		for _, f := range markdownFiles {
+			out := f[:len(f)-len(filepath.Ext(f))] + ".html"
+			if relPath == out {
+				expected = true
+				break
+			}
+		}
+		for _, f := range assetFiles {
+			if relPath == f {
+				expected = true
+				break
+			}
+		}
+		if !expected {
+			fmt.Printf("[Clean] Removing orphaned output: %s\n", path)
+			os.Remove(path)
+		}
+		return nil
+	})
+
+	// Write cache after full rebuild
+	newCache := &cacheFile{Version: 1, Files: make(map[string]cacheFileEntry)}
+	for _, f := range markdownFiles {
+		src := filepath.Join(inputDir, f)
+		mtime := int64(0)
+		if info, err := os.Stat(src); err == nil {
+			mtime = info.ModTime().Unix()
+		}
+		out := f[:len(f)-len(filepath.Ext(f))] + ".html"
+		newCache.Files[f] = cacheFileEntry{Mtime: mtime, Output: out}
+	}
+	for _, f := range assetFiles {
+		src := filepath.Join(inputDir, f)
+		mtime := int64(0)
+		if info, err := os.Stat(src); err == nil {
+			mtime = info.ModTime().Unix()
+		}
+		newCache.Files[f] = cacheFileEntry{Mtime: mtime, Output: f}
+	}
+	cachePath = filepath.Join(outputDir, ".colade-cache")
+	if err := saveCache(cachePath, newCache); err != nil {
+		return fmt.Errorf("failed to save cache: %w", err)
 	}
 
 	fmt.Printf("[Build] Site build complete in %v.\n", time.Since(startTime))
