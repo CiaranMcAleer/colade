@@ -49,7 +49,7 @@ func saveCache(path string, c *cacheFile) error {
 	return enc.Encode(c)
 }
 
-func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool) error {
+func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool, rssURL string, rssMaxItems int) error {
 	// Check if input directory exists
 	info, err := os.Stat(inputDir)
 	if err != nil {
@@ -210,6 +210,14 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool
 			fmt.Fprint(os.Stderr, <-sizeOut)
 		}
 
+		// Generate RSS feed if requested
+		if rssURL != "" {
+			rssGen := NewRSSGenerator(rssURL, outputDir)
+			if err := rssGen.Generate(markdownFiles, inputDir, rssMaxItems); err != nil {
+				return fmt.Errorf("failed to generate RSS feed: %w", err)
+			}
+		}
+
 		if err := saveCache(cachePath, newCache); err != nil {
 			return fmt.Errorf("failed to save cache: %w", err)
 		}
@@ -262,6 +270,14 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool
 		fmt.Fprint(os.Stderr, <-sizeOut)
 	}
 
+	// Generate RSS feed if requested
+	if rssURL != "" {
+		rssGen := NewRSSGenerator(rssURL, outputDir)
+		if err := rssGen.Generate(markdownFiles, inputDir, rssMaxItems); err != nil {
+			return fmt.Errorf("failed to generate RSS feed: %w", err)
+		}
+	}
+
 	filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -294,6 +310,10 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool
 				expected = true
 				break
 			}
+		}
+		// Don't clean up RSS feed
+		if relPath == "feed.xml" && rssURL != "" {
+			expected = true
 		}
 		if !expected {
 			fmt.Printf("[Clean] Removing orphaned output: %s\n", path)

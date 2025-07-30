@@ -7,7 +7,6 @@ import (
 	"os"
 )
 
-// TODO Allow user to set threshold via CLI
 func CheckGzipSize(path string, threshold int, out chan<- string) {
 	go func() {
 		data, err := os.ReadFile(path)

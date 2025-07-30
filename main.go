@@ -37,7 +37,9 @@ func main() {
 			outputDir := args[1]
 			threshold, _ := cmd.Flags().GetInt("size-threshold")
 			noIncremental, _ := cmd.Flags().GetBool("no-incremental")
-			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024, noIncremental); err != nil {
+			rssURL, _ := cmd.Flags().GetString("rss")
+			rssMaxItems, _ := cmd.Flags().GetInt("rss-max-items")
+			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024, noIncremental, rssURL, rssMaxItems); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -45,6 +47,8 @@ func main() {
 	}
 	buildCmd.Flags().IntP("size-threshold", "s", 14, "Size threshold in KB for gzip compression warnings")
 	buildCmd.Flags().Bool("no-incremental", false, "Disable incremental build and force full rebuild")
+	buildCmd.Flags().StringP("rss", "r", "", "Generate RSS feed with specified base URL (e.g., https://example.com)")
+	buildCmd.Flags().Int("rss-max-items", 20, "Maximum number of items to include in RSS feed (default 20)")
 
 	rootCmd.AddCommand(buildCmd)
 
