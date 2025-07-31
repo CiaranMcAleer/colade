@@ -40,7 +40,8 @@ func main() {
 			rssURL, _ := cmd.Flags().GetString("rss")
 			rssMaxItems, _ := cmd.Flags().GetInt("rss-max-items")
 			keepOrphaned, _ := cmd.Flags().GetBool("keep-orphaned")
-			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024, noIncremental, rssURL, rssMaxItems, keepOrphaned); err != nil {
+			templateOpt, _ := cmd.Flags().GetString("template")
+			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024, noIncremental, rssURL, rssMaxItems, keepOrphaned, templateOpt); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -51,6 +52,7 @@ func main() {
 	buildCmd.Flags().StringP("rss", "r", "", "Generate RSS feed with specified base URL (e.g., https://example.com)")
 	buildCmd.Flags().Int("rss-max-items", 20, "Maximum number of items to include in RSS feed (default 20)")
 	buildCmd.Flags().Bool("keep-orphaned", false, "Keep orphaned files in output directory instead of deleting them")
+	buildCmd.Flags().String("template", "default", "Template to use for HTML output (name of bundled template or path to custom template)")
 
 	rootCmd.AddCommand(buildCmd)
 

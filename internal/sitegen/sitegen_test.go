@@ -9,7 +9,7 @@ import (
 
 func TestBuildSite_InputDirValidation(t *testing.T) {
 	t.Run("nonexistent input dir", func(t *testing.T) {
-		err := BuildSite("/unlikely/to/exist/colade_test_input", t.TempDir(), 14*1024, false, "", 20, false)
+		err := BuildSite("/unlikely/to/exist/colade_test_input", t.TempDir(), 14*1024, false, "", 20, false, "default")
 		if err == nil || err.Error() == "" {
 			t.Error("expected error for nonexistent input directory, got nil")
 		}
@@ -18,7 +18,7 @@ func TestBuildSite_InputDirValidation(t *testing.T) {
 	t.Run("input path is file", func(t *testing.T) {
 		file := filepath.Join(t.TempDir(), "file.md")
 		os.WriteFile(file, []byte("# test"), 0644)
-		err := BuildSite(file, t.TempDir(), 14*1024, false, "", 20, false)
+		err := BuildSite(file, t.TempDir(), 14*1024, false, "", 20, false, "default")
 		if err == nil || err.Error() == "" {
 			t.Error("expected error for input path as file, got nil")
 		}
@@ -27,7 +27,7 @@ func TestBuildSite_InputDirValidation(t *testing.T) {
 	t.Run("valid input dir", func(t *testing.T) {
 		inputDir := t.TempDir()
 		outputDir := t.TempDir()
-		if err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false); err != nil {
+		if err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default"); err != nil {
 			t.Errorf("expected no error for valid input/output dirs, got: %v", err)
 		}
 	})
@@ -40,7 +40,7 @@ func TestBuildSite_MarkdownAndAssetDiscovery(t *testing.T) {
 	os.WriteFile(filepath.Join(inputDir, "file.txt"), []byte("asset"), 0644)
 	os.Mkdir(filepath.Join(inputDir, ".hidden"), 0755)
 	os.WriteFile(filepath.Join(inputDir, ".hidden", "skip.md"), []byte("# Hidden"), 0644)
-	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false)
+	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestBuildSite_AssetCopyError(t *testing.T) {
 	outputDir := t.TempDir()
 	assetPath := filepath.Join(inputDir, "asset.txt")
 	os.WriteFile(assetPath, []byte("asset"), 0000) // unreadable
-	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false)
+	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default")
 	if err == nil {
 		t.Error("expected error when asset file is unreadable")
 	}
@@ -71,7 +71,7 @@ func TestBuildSite_MarkdownConversion(t *testing.T) {
 	outputDir := t.TempDir()
 	mdPath := filepath.Join(inputDir, "doc.md")
 	os.WriteFile(mdPath, []byte("# Hello World"), 0644)
-	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false)
+	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestBuildSite_MarkdownReadError(t *testing.T) {
 	outputDir := t.TempDir()
 	mdPath := filepath.Join(inputDir, "bad.md")
 	os.WriteFile(mdPath, []byte("# Bad"), 0000) // unreadable
-	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false)
+	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default")
 	if err == nil {
 		t.Error("expected error when markdown file is unreadable")
 	}
@@ -104,7 +104,7 @@ func TestBuildSite_Incremental(t *testing.T) {
 	os.WriteFile(assetPath, []byte("B"), 0644)
 
 	// Initial build (should create both outputs)
-	if err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false); err != nil {
+	if err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default"); err != nil {
 		t.Fatalf("initial build failed: %v", err)
 	}
 	htmlPath := filepath.Join(outputDir, "a.html")
@@ -123,7 +123,7 @@ func TestBuildSite_Incremental(t *testing.T) {
 	os.WriteFile(newAsset, []byte("C"), 0644)
 
 	// Incremental build (should update a.html, remove b.txt, add c.txt)
-	if err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false); err != nil {
+	if err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default"); err != nil {
 		t.Fatalf("incremental build failed: %v", err)
 	}
 	if _, err := os.Stat(htmlPath); err != nil {

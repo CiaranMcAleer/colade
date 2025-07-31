@@ -9,6 +9,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type RSSGenerator struct {
@@ -151,7 +154,7 @@ func (rg *RSSGenerator) extractTitle(content, fallback string) string {
 	// Convert kebab-case or snake_case to readable title
 	filename = strings.ReplaceAll(filename, "-", " ")
 	filename = strings.ReplaceAll(filename, "_", " ")
-	return strings.Title(filename)
+	return cases.Title(language.Und).String(filename)
 }
 
 // extractDescription extracts a description from the content
@@ -230,7 +233,7 @@ func (rg *RSSGenerator) inferSiteTitle(inputDir string) string {
 	// Make directory name more readable
 	dirName = strings.ReplaceAll(dirName, "-", " ")
 	dirName = strings.ReplaceAll(dirName, "_", " ")
-	return strings.Title(dirName)
+	return cases.Title(language.Und).String(dirName)
 }
 
 // inferSiteDescription tries to infer a site description

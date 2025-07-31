@@ -2,6 +2,8 @@
 package sitegen
 
 import (
+	"bytes"
+	"html/template"
 	"io"
 	"os"
 	"path/filepath"
@@ -40,8 +42,43 @@ func parseMarkdownFile(path string) ([]byte, error) {
 }
 
 // renderHTMLPage is a future-proof extension point for templating support.
-func renderHTMLPage(html []byte) []byte {
-	//TODO when implementing templating, this will need to render the HTML
-	// For now, just return the HTML as-is.
-	return html
+func renderHTMLPage(html []byte, templateOpt string) []byte {
+	// Determine template path
+	var templatePath string
+	// Use templateOpt directly if it exists as a file (absolute or relative)
+	if templateOpt != "" {
+		if _, err := os.Stat(templateOpt); err == nil {
+			templatePath = templateOpt
+		} else if filepath.IsAbs(templateOpt) || filepath.Ext(templateOpt) == ".html" {
+			templatePath = templateOpt
+		} else {
+			templatePath = filepath.Join("templates", templateOpt+".html")
+		}
+	} else {
+		templatePath = filepath.Join("templates", "default.html")
+	}
+	// Fallback: if template doesn't exist, use default
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		templatePath = filepath.Join("templates", "default.html")
+	}
+
+	tmpl, err := template.ParseFiles(templatePath)
+	if err != nil {
+		// fallback to raw HTML if template fails
+		return html
+	}
+
+	data := struct {
+		Content template.HTML
+		Meta    map[string]interface{}
+	}{
+		Content: template.HTML(html),
+		Meta:    map[string]interface{}{}, // TODO: pass real meta if available
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return html
+	}
+	return buf.Bytes()
 }

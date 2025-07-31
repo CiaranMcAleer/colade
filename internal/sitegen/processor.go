@@ -9,17 +9,32 @@ import (
 	"time"
 
 	"github.com/yuin/goldmark"
+	meta "github.com/yuin/goldmark-meta"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/renderer/html"
+	mermaid "go.abhg.dev/goldmark/mermaid"
 )
 
 // MarkdownProcessor handles markdown file conversion
 type MarkdownProcessor struct {
-	md goldmark.Markdown
+	md          goldmark.Markdown
+	templateOpt string
 }
 
 // NewMarkdownProcessor creates a new markdown processor
-func NewMarkdownProcessor() *MarkdownProcessor {
+func NewMarkdownProcessor(templateOpt string) *MarkdownProcessor {
 	return &MarkdownProcessor{
-		md: goldmark.New(),
+		md: goldmark.New(
+			goldmark.WithExtensions(
+				extension.GFM,
+				meta.Meta,
+				&mermaid.Extender{},
+			),
+			goldmark.WithRendererOptions(
+				html.WithUnsafe(),
+			),
+		),
+		templateOpt: templateOpt,
 	}
 }
 
@@ -36,11 +51,12 @@ func (mp *MarkdownProcessor) ProcessMarkdownFile(inputDir, outputDir, relPath st
 
 	content = replaceMdLinks(content)
 	var buf bytes.Buffer
+	// TODO: Extract frontmatter/meta and pass to renderHTMLPage for template rendering
 	if err := mp.md.Convert(content, &buf); err != nil {
 		return fmt.Errorf("failed to convert markdown '%s': %w", relPath, err)
 	}
 
-	htmlOut := renderHTMLPage(buf.Bytes())
+	htmlOut := renderHTMLPage(buf.Bytes(), mp.templateOpt)
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return fmt.Errorf("failed to create output dir for '%s': %w", relPath, err)
 	}
@@ -69,18 +85,20 @@ type IncrementalBuilder struct {
 	cache         *cacheFile
 	newCache      *cacheFile
 	seen          map[string]bool
+	templateOpt   string
 }
 
 // NewIncrementalBuilder creates a new incremental builder
-func NewIncrementalBuilder(inputDir, outputDir string, sizeThreshold int, cache *cacheFile) *IncrementalBuilder {
+func NewIncrementalBuilder(inputDir, outputDir string, sizeThreshold int, cache *cacheFile, templateOpt string) *IncrementalBuilder {
 	return &IncrementalBuilder{
-		processor:     NewMarkdownProcessor(),
+		processor:     NewMarkdownProcessor(templateOpt),
 		inputDir:      inputDir,
 		outputDir:     outputDir,
 		sizeThreshold: sizeThreshold,
 		cache:         cache,
 		newCache:      newCache(),
 		seen:          make(map[string]bool),
+		templateOpt:   templateOpt,
 	}
 }
 
@@ -160,15 +178,17 @@ type FullBuilder struct {
 	inputDir      string
 	outputDir     string
 	sizeThreshold int
+	templateOpt   string
 }
 
 // NewFullBuilder creates a new full builder
-func NewFullBuilder(inputDir, outputDir string, sizeThreshold int) *FullBuilder {
+func NewFullBuilder(inputDir, outputDir string, sizeThreshold int, templateOpt string) *FullBuilder {
 	return &FullBuilder{
-		processor:     NewMarkdownProcessor(),
+		processor:     NewMarkdownProcessor(templateOpt),
 		inputDir:      inputDir,
 		outputDir:     outputDir,
 		sizeThreshold: sizeThreshold,
+		templateOpt:   templateOpt,
 	}
 }
 

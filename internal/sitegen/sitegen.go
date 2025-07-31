@@ -3,11 +3,25 @@ package sitegen
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"time"
 )
 
-func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool, rssURL string, rssMaxItems int, keepOrphaned bool) error {
+func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool, rssURL string, rssMaxItems int, keepOrphaned bool, templateOpt string) error {
+	// Copy style.css to output directory
+	cssSrc := "style.css"
+	cssDst := filepath.Join(outputDir, "style.css")
+	cssIn, err := os.Open(cssSrc)
+	if err == nil {
+		defer cssIn.Close()
+		cssOut, err := os.Create(cssDst)
+		if err == nil {
+			defer cssOut.Close()
+			io.Copy(cssOut, cssIn)
+		}
+	}
 	// Validate inputs and create output directory
 	if err := validateInputsAndCreateOutput(inputDir, outputDir); err != nil {
 		return err
@@ -26,7 +40,7 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool
 
 	// Try incremental build first
 	if !noIncremental {
-		if completed, err := tryIncrementalBuild(inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned); err != nil {
+		if completed, err := tryIncrementalBuild(inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned, templateOpt); err != nil {
 			return err
 		} else if completed {
 			return nil
@@ -34,7 +48,7 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool
 	}
 
 	// Fall back to full build
-	return performFullBuild(inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned)
+	return performFullBuild(inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned, templateOpt)
 }
 
 // validateInputsAndCreateOutput validates input directory and creates output directory
@@ -68,7 +82,7 @@ func logDiscoveredFiles(fileSet *FileSet) {
 }
 
 // tryIncrementalBuild attempts an incremental build, returns (completed, error)
-func tryIncrementalBuild(inputDir, outputDir string, sizeThreshold int, rssURL string, rssMaxItems int, fileSet *FileSet, startTime time.Time, keepOrphaned bool) (bool, error) {
+func tryIncrementalBuild(inputDir, outputDir string, sizeThreshold int, rssURL string, rssMaxItems int, fileSet *FileSet, startTime time.Time, keepOrphaned bool, templateOpt string) (bool, error) {
 	cachePath := getCachePath(outputDir)
 	cache, err := loadCache(cachePath)
 	if err != nil || cache.Version != 1 {
@@ -79,7 +93,7 @@ func tryIncrementalBuild(inputDir, outputDir string, sizeThreshold int, rssURL s
 	fmt.Printf("[Build] Loaded cache from %s\n", cachePath)
 
 	// Perform incremental build
-	builder := NewIncrementalBuilder(inputDir, outputDir, sizeThreshold, cache)
+	builder := NewIncrementalBuilder(inputDir, outputDir, sizeThreshold, cache, templateOpt)
 	sizeOut := make(chan string, len(fileSet.MarkdownFiles))
 
 	// Process files incrementally
@@ -115,8 +129,8 @@ func tryIncrementalBuild(inputDir, outputDir string, sizeThreshold int, rssURL s
 }
 
 // performFullBuild performs a complete rebuild
-func performFullBuild(inputDir, outputDir string, sizeThreshold int, rssURL string, rssMaxItems int, fileSet *FileSet, startTime time.Time, keepOrphaned bool) error {
-	builder := NewFullBuilder(inputDir, outputDir, sizeThreshold)
+func performFullBuild(inputDir, outputDir string, sizeThreshold int, rssURL string, rssMaxItems int, fileSet *FileSet, startTime time.Time, keepOrphaned bool, templateOpt string) error {
+	builder := NewFullBuilder(inputDir, outputDir, sizeThreshold, templateOpt)
 
 	// Process asset files
 	if err := builder.ProcessAssetFiles(fileSet.AssetFiles); err != nil {
