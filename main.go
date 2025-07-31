@@ -39,7 +39,8 @@ func main() {
 			noIncremental, _ := cmd.Flags().GetBool("no-incremental")
 			rssURL, _ := cmd.Flags().GetString("rss")
 			rssMaxItems, _ := cmd.Flags().GetInt("rss-max-items")
-			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024, noIncremental, rssURL, rssMaxItems); err != nil {
+			keepOrphaned, _ := cmd.Flags().GetBool("keep-orphaned")
+			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024, noIncremental, rssURL, rssMaxItems, keepOrphaned); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -49,6 +50,7 @@ func main() {
 	buildCmd.Flags().Bool("no-incremental", false, "Disable incremental build and force full rebuild")
 	buildCmd.Flags().StringP("rss", "r", "", "Generate RSS feed with specified base URL (e.g., https://example.com)")
 	buildCmd.Flags().Int("rss-max-items", 20, "Maximum number of items to include in RSS feed (default 20)")
+	buildCmd.Flags().Bool("keep-orphaned", false, "Keep orphaned files in output directory instead of deleting them")
 
 	rootCmd.AddCommand(buildCmd)
 
