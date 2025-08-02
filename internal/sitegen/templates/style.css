@@ -1,0 +1,23 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 2rem auto;
+  max-width: 700px;
+  background: #f9f9f9;
+  color: #222;
+}
+h1, h2, h3, h4, h5, h6 {
+  color: #2a5d9f;
+}
+a {
+  color: #2a5d9f;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+code, pre {
+  background: #f4f4f4;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-family: "Fira Mono", monospace;
+}
