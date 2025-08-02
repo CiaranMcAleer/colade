@@ -1,5 +1,3 @@
-     This repo is under active development, most of the features are implemented, but there are still some things to do before the first release.
-
 # colade
 Colade is a blog/static site generator written in go, I designed this to learn more about the go language, it is not meant to be a full featured static site generator like Hugo or Jekyll.
 
