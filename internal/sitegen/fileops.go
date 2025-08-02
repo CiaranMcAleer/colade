@@ -3,11 +3,15 @@ package sitegen
 
 import (
 	"bytes"
+	"embed"
 	"html/template"
 	"io"
 	"os"
 	"path/filepath"
 )
+
+//go:embed templates/*.html templates/style.css
+var EmbeddedFiles embed.FS
 
 // copyFilePreserveDirs copies a file from src to dst, creating parent directories as needed.
 func copyFilePreserveDirs(src, dst string) error {
@@ -52,17 +56,20 @@ func renderHTMLPage(html []byte, templateOpt string) []byte {
 		} else if filepath.IsAbs(templateOpt) || filepath.Ext(templateOpt) == ".html" {
 			templatePath = templateOpt
 		} else {
-			templatePath = filepath.Join("templates", templateOpt+".html")
+			templatePath = "templates/" + templateOpt + ".html"
 		}
 	} else {
-		templatePath = filepath.Join("templates", "default.html")
+		templatePath = "templates/default.html"
 	}
 	// Fallback: if template doesn't exist, use default
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		templatePath = filepath.Join("templates", "default.html")
+	var tmpl *template.Template
+	var err error
+	// If templatePath is an absolute path or exists on disk, use ParseFiles
+	if filepath.IsAbs(templatePath) || fileExists(templatePath) {
+		tmpl, err = template.ParseFiles(templatePath)
+	} else {
+		tmpl, err = template.ParseFS(EmbeddedFiles, templatePath)
 	}
-
-	tmpl, err := template.ParseFiles(templatePath)
 	if err != nil {
 		// fallback to raw HTML if template fails
 		return html
@@ -81,4 +88,10 @@ func renderHTMLPage(html []byte, templateOpt string) []byte {
 		return html
 	}
 	return buf.Bytes()
+}
+
+// fileExists checks if a file exists on disk
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }

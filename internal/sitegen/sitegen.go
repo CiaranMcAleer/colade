@@ -10,10 +10,9 @@ import (
 )
 
 func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool, rssURL string, rssMaxItems int, keepOrphaned bool, templateOpt string) error {
-	// Copy style.css to output directory
-	cssSrc := "style.css"
+	// Copy style.css from embedded files to output directory
 	cssDst := filepath.Join(outputDir, "style.css")
-	cssIn, err := os.Open(cssSrc)
+	cssIn, err := EmbeddedFiles.Open("style.css")
 	if err == nil {
 		defer cssIn.Close()
 		cssOut, err := os.Create(cssDst)
