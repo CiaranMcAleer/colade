@@ -12,6 +12,7 @@ import (
 	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer/html"
+	"go.abhg.dev/goldmark/frontmatter"
 	mermaid "go.abhg.dev/goldmark/mermaid"
 )
 
@@ -29,6 +30,7 @@ func NewMarkdownProcessor(templateOpt string) *MarkdownProcessor {
 				extension.GFM,
 				meta.Meta,
 				&mermaid.Extender{},
+				&frontmatter.Extender{},
 			),
 			goldmark.WithRendererOptions(
 				html.WithUnsafe(),
@@ -51,11 +53,11 @@ func (mp *MarkdownProcessor) ProcessMarkdownFile(inputDir, outputDir, relPath st
 
 	content = replaceMdLinks(content)
 	var buf bytes.Buffer
-	// TODO: Extract frontmatter/meta and pass to renderHTMLPage for template rendering
 	if err := mp.md.Convert(content, &buf); err != nil {
 		return fmt.Errorf("failed to convert markdown '%s': %w", relPath, err)
 	}
 
+	// Frontmatter is automatically stripped from content by the extension
 	htmlOut := renderHTMLPage(buf.Bytes(), mp.templateOpt)
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return fmt.Errorf("failed to create output dir for '%s': %w", relPath, err)
