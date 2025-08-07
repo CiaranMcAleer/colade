@@ -10,6 +10,57 @@ Features:
 - Incremental builds to speed up build process for large sites
 - RSS feed generation
 
+## Adding Headers and Footers
+
+To add a header or footer to your site, create `header.md` and/or `footer.md` files in your input directory. These files will be converted to HTML and included at the top and bottom of every generated page. You can also use cli flags to specify custom header and footer files:
+
+## Using YAML Frontmatter
+
+You can add YAML frontmatter to your markdown files to specify metadata such as title, date, and tags. Example:
+
+```markdown
+---
+title: My Post Title
+date: 2025-08-07
+tags: [go, static-site]
+---
+# My Post
+
+Content goes here.
+```
+
+Supported date formats include `yyyy-mm-dd`, `dd/mm/yyyy`, `mm/dd/yyyy`, and long-form dates like `7 August 2025`.
+
+## Custom Templates
+
+You can define custom HTML templates in the `templates/` directory. To use a custom template, specify its name (without extension) in your build command or frontmatter.
+
+- Template variables available:
+  - `.Content`: Rendered HTML content of the markdown file
+  - `.Title`: Title from frontmatter
+  - `.Date`: Date from frontmatter (normalized)
+  - `.Tags`: Tags from frontmatter (as a list)
+  - `.HeaderHTML` / `.FooterHTML`: Rendered header/footer HTML
+  - `.Meta`: Full frontmatter as a map
+
+Example usage in a template:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ .Title }}</title>
+</head>
+<body>
+  {{ .HeaderHTML }}
+  <h1>{{ .Title }}</h1>
+  {{ if .Date }}<div class="date">{{ .Date }}</div>{{ end }}
+  {{ .Content }}
+  {{ .FooterHTML }}
+</body>
+</html>
+```
+
 ## Incremental Build Cache Format
 
 `.colade-cache` (JSON example):

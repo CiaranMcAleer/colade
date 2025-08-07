@@ -4,12 +4,14 @@ package sitegen
 import (
 	"bytes"
 	"embed"
+	"fmt"
 	"html/template"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 //go:embed templates/*.html templates/style.css
@@ -46,7 +48,7 @@ func parseMarkdownFile(path string) ([]byte, error) {
 }
 
 // renderHTMLPage is a future-proof extension point for templating support.
-func renderHTMLPage(html []byte, templateOpt string, headerHTML, footerHTML []byte) []byte {
+func renderHTMLPage(html []byte, templateOpt string, headerHTML, footerHTML []byte, meta map[string]interface{}) []byte {
 	// Determine template path
 	var templatePath string
 	if templateOpt != "" {
@@ -71,17 +73,70 @@ func renderHTMLPage(html []byte, templateOpt string, headerHTML, footerHTML []by
 		return html
 	}
 
+	// Flatten common meta fields for easier template access
+	var title, date string
+	var tags []interface{}
+	if meta != nil {
+		if v, ok := meta["title"].(string); ok {
+			title = v
+		}
+		// Accept date as string or time.Time
+		switch v := meta["date"].(type) {
+		case string:
+			fmt.Printf("[DEBUG] meta[\"date\"] = %q\n", v)
+			fmt.Printf("[DEBUG] meta = %#v\n", meta)
+			formats := []string{
+				"2006-01-02",      // ISO
+				"02/01/2006",      // UK/EU
+				"01/02/2006",      // US
+				"02 Jan 2006",     // 07 Aug 2025
+				"2 January 2006",  // 7 August 2025
+				"January 2, 2006", // August 7, 2025
+			}
+			var parsed time.Time
+			for _, f := range formats {
+				t, err := time.Parse(f, v)
+				if err == nil {
+					fmt.Printf("[DEBUG] Parsed date %q with format %q\n", v, f)
+					parsed = t
+					break
+				}
+			}
+			if !parsed.IsZero() {
+				date = parsed.Format("02 Jan 2006")
+			} else {
+				fmt.Printf("[DEBUG] Could not parse date %q, using as-is\n", v)
+				date = v // fallback to original
+			}
+		case time.Time:
+			fmt.Printf("[DEBUG] meta[\"date\"] is time.Time: %v\n", v)
+			date = v.Format("02 Jan 2006")
+		}
+		if v, ok := meta["tags"].([]interface{}); ok {
+			tags = v
+		}
+	}
+
 	data := struct {
 		Content    template.HTML
 		Meta       map[string]interface{}
 		HeaderHTML template.HTML
 		FooterHTML template.HTML
+		Title      string
+		Date       string
+		Tags       []interface{}
 	}{
 		Content:    template.HTML(html),
-		Meta:       map[string]interface{}{},
+		Meta:       meta,
 		HeaderHTML: template.HTML(headerHTML),
 		FooterHTML: template.HTML(footerHTML),
+		Title:      title,
+		Date:       date,
+		Tags:       tags,
 	}
+
+	// DEBUG: Print the final date value passed to the template
+	fmt.Printf("[DEBUG] FINAL data.Date = %q for title %q\n", data.Date, data.Title)
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {

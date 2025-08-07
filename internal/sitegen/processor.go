@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/yuin/goldmark"
-	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 	"go.abhg.dev/goldmark/frontmatter"
 	mermaid "go.abhg.dev/goldmark/mermaid"
 )
@@ -28,9 +29,10 @@ func NewMarkdownProcessor(templateOpt string) *MarkdownProcessor {
 		md: goldmark.New(
 			goldmark.WithExtensions(
 				extension.GFM,
-				meta.Meta,
 				&mermaid.Extender{},
-				&frontmatter.Extender{},
+				&frontmatter.Extender{
+					Mode: frontmatter.SetMetadata,
+				},
 			),
 			goldmark.WithRendererOptions(
 				html.WithUnsafe(),
@@ -58,11 +60,26 @@ func (mp *MarkdownProcessor) ProcessMarkdownFile(
 
 	content = replaceMdLinks(content)
 	var buf bytes.Buffer
-	if err := mp.md.Convert(content, &buf); err != nil {
-		return fmt.Errorf("failed to convert markdown '%s': %w", relPath, err)
+
+	parserCtx := parser.NewContext()
+	md := mp.md
+	textReader := text.NewReader(content)
+	root := md.Parser().Parse(textReader, parser.WithContext(parserCtx))
+
+	// Extract meta from root.Meta()
+	var metaData map[string]interface{}
+	if metaDoc, ok := root.(interface{ Meta() map[string]interface{} }); ok {
+		metaData = metaDoc.Meta()
+	}
+	if metaData == nil {
+		metaData = map[string]interface{}{}
 	}
 
-	htmlOut := renderHTMLPage(buf.Bytes(), mp.templateOpt, headerHTML, footerHTML)
+	if err := md.Renderer().Render(&buf, content, root); err != nil {
+		return fmt.Errorf("failed to render markdown '%s': %w", relPath, err)
+	}
+
+	htmlOut := renderHTMLPage(buf.Bytes(), mp.templateOpt, headerHTML, footerHTML, metaData)
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return fmt.Errorf("failed to create output dir for '%s': %w", relPath, err)
 	}
