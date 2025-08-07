@@ -41,7 +41,14 @@ func main() {
 			rssMaxItems, _ := cmd.Flags().GetInt("rss-max-items")
 			keepOrphaned, _ := cmd.Flags().GetBool("keep-orphaned")
 			templateOpt, _ := cmd.Flags().GetString("template")
-			if err := sitegen.BuildSite(inputDir, outputDir, threshold*1024, noIncremental, rssURL, rssMaxItems, keepOrphaned, templateOpt); err != nil {
+			headerFile, _ := cmd.Flags().GetString("header-file")
+			footerFile, _ := cmd.Flags().GetString("footer-file")
+			noHeader, _ := cmd.Flags().GetBool("no-header")
+			noFooter, _ := cmd.Flags().GetBool("no-footer")
+			if err := sitegen.BuildSite(
+				inputDir, outputDir, threshold*1024, noIncremental, rssURL, rssMaxItems, keepOrphaned, templateOpt,
+				headerFile, footerFile, noHeader, noFooter,
+			); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -53,6 +60,10 @@ func main() {
 	buildCmd.Flags().Int("rss-max-items", 20, "Maximum number of items to include in RSS feed (default 20)")
 	buildCmd.Flags().Bool("keep-orphaned", false, "Keep orphaned files in output directory instead of deleting them")
 	buildCmd.Flags().String("template", "default", "Template to use for HTML output (name of bundled template or path to custom template)")
+	buildCmd.Flags().String("header-file", "", "Markdown file to use as header (default: header.md in inputDir)")
+	buildCmd.Flags().String("footer-file", "", "Markdown file to use as footer (default: footer.md in inputDir)")
+	buildCmd.Flags().Bool("no-header", false, "Disable header injection")
+	buildCmd.Flags().Bool("no-footer", false, "Disable footer injection")
 
 	rootCmd.AddCommand(buildCmd)
 

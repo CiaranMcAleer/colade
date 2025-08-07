@@ -41,7 +41,7 @@ func TestBuildSite_WithDifferentTemplates(t *testing.T) {
 		if _, err := os.Stat(tplOpt); err != nil {
 			t.Fatalf("[DEBUG] Template file missing: %v", err)
 		}
-		err := BuildSite(inputDir, outputDir, 0, true, "", 0, false, tplOpt)
+		err := BuildSite(inputDir, outputDir, 0, true, "", 0, false, tplOpt, "", "", false, false)
 		if err != nil {
 			t.Fatalf("BuildSite failed: %v", err)
 		}
@@ -65,7 +65,7 @@ func TestBuildSite_WithDifferentTemplates(t *testing.T) {
 		if _, err := os.Stat(tplOpt); err != nil {
 			t.Fatalf("[DEBUG] Template file missing: %v", err)
 		}
-		err := BuildSite(inputDir, outputDir, 0, true, "", 0, false, tplOpt)
+		err := BuildSite(inputDir, outputDir, 0, true, "", 0, false, tplOpt, "", "", false, false)
 		if err != nil {
 			t.Fatalf("BuildSite failed: %v", err)
 		}

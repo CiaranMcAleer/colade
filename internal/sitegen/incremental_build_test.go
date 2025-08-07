@@ -38,7 +38,7 @@ func TestIncrementalBuildCacheFilenames(t *testing.T) {
 	}
 
 	// First build
-	if err := BuildSite(inputDir, outputDir, 0, false, "", 0, false, "default"); err != nil {
+	if err := BuildSite(inputDir, outputDir, 0, false, "", 0, false, "default", "", "", false, false); err != nil {
 		t.Fatalf("first build failed: %v", err)
 	}
 	checkOutputFiles(t, outputDir, []string{"one.html", "two.html", "three.html", ".colade-cache"})
@@ -50,7 +50,7 @@ func TestIncrementalBuildCacheFilenames(t *testing.T) {
 	}
 
 	// Second build (incremental)
-	if err := BuildSite(inputDir, outputDir, 0, false, "", 0, false, "default"); err != nil {
+	if err := BuildSite(inputDir, outputDir, 0, false, "", 0, false, "default", "", "", false, false); err != nil {
 		t.Fatalf("second build failed: %v", err)
 	}
 	checkOutputFiles(t, outputDir, []string{"one.html", "two.html", "three.html", ".colade-cache"})

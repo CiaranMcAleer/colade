@@ -41,7 +41,12 @@ func NewMarkdownProcessor(templateOpt string) *MarkdownProcessor {
 }
 
 // ProcessMarkdownFile converts a single markdown file to HTML
-func (mp *MarkdownProcessor) ProcessMarkdownFile(inputDir, outputDir, relPath string, sizeThreshold int, sizeOut chan<- string) error {
+func (mp *MarkdownProcessor) ProcessMarkdownFile(
+	inputDir, outputDir, relPath string,
+	sizeThreshold int,
+	sizeOut chan<- string,
+	headerHTML, footerHTML []byte,
+) error {
 	src := filepath.Join(inputDir, relPath)
 	dst := filepath.Join(outputDir, relPath)
 	dst = dst[:len(dst)-len(filepath.Ext(dst))] + ".html"
@@ -57,8 +62,7 @@ func (mp *MarkdownProcessor) ProcessMarkdownFile(inputDir, outputDir, relPath st
 		return fmt.Errorf("failed to convert markdown '%s': %w", relPath, err)
 	}
 
-	// Frontmatter is automatically stripped from content by the extension
-	htmlOut := renderHTMLPage(buf.Bytes(), mp.templateOpt)
+	htmlOut := renderHTMLPage(buf.Bytes(), mp.templateOpt, headerHTML, footerHTML)
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return fmt.Errorf("failed to create output dir for '%s': %w", relPath, err)
 	}
@@ -105,7 +109,9 @@ func NewIncrementalBuilder(inputDir, outputDir string, sizeThreshold int, cache 
 }
 
 // ProcessMarkdownFiles processes all markdown files incrementally
-func (ib *IncrementalBuilder) ProcessMarkdownFiles(markdownFiles []string, sizeOut chan<- string) error {
+func (ib *IncrementalBuilder) ProcessMarkdownFilesWithHeaderFooter(
+	markdownFiles []string, sizeOut chan<- string, headerHTML, footerHTML []byte,
+) error {
 	for _, relPath := range markdownFiles {
 		src := filepath.Join(ib.inputDir, relPath)
 		dst := filepath.Join(ib.outputDir, relPath)
@@ -116,7 +122,7 @@ func (ib *IncrementalBuilder) ProcessMarkdownFiles(markdownFiles []string, sizeO
 		prev, ok := ib.cache.Files[relPath]
 		if !ok || prev.Mtime != mtime {
 			fmt.Printf("[IncBuild] %s -> %s (changed/new)\n", relPath, dst)
-			if err := ib.processor.ProcessMarkdownFile(ib.inputDir, ib.outputDir, relPath, ib.sizeThreshold, sizeOut); err != nil {
+			if err := ib.processor.ProcessMarkdownFile(ib.inputDir, ib.outputDir, relPath, ib.sizeThreshold, sizeOut, headerHTML, footerHTML); err != nil {
 				return err
 			}
 		} else {
@@ -208,12 +214,14 @@ func (fb *FullBuilder) ProcessAssetFiles(assetFiles []string) error {
 }
 
 // ProcessMarkdownFiles processes all markdown files in full build mode
-func (fb *FullBuilder) ProcessMarkdownFiles(markdownFiles []string, sizeOut chan<- string) error {
+func (fb *FullBuilder) ProcessMarkdownFilesWithHeaderFooter(
+	markdownFiles []string, sizeOut chan<- string, headerHTML, footerHTML []byte,
+) error {
 	for _, relPath := range markdownFiles {
 		opStart := time.Now()
 		fmt.Printf("[Build]  %s -> %s\n", relPath, filepath.Join(fb.outputDir, relPath[:len(relPath)-len(filepath.Ext(relPath))]+".html"))
 
-		if err := fb.processor.ProcessMarkdownFile(fb.inputDir, fb.outputDir, relPath, fb.sizeThreshold, sizeOut); err != nil {
+		if err := fb.processor.ProcessMarkdownFile(fb.inputDir, fb.outputDir, relPath, fb.sizeThreshold, sizeOut, headerHTML, footerHTML); err != nil {
 			return err
 		}
 		fmt.Printf("[Build]  Done in %v\n", time.Since(opStart))

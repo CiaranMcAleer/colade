@@ -9,7 +9,19 @@ import (
 	"time"
 )
 
-func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool, rssURL string, rssMaxItems int, keepOrphaned bool, templateOpt string) error {
+func BuildSite(
+	inputDir, outputDir string,
+	sizeThreshold int,
+	noIncremental bool,
+	rssURL string,
+	rssMaxItems int,
+	keepOrphaned bool,
+	templateOpt string,
+	headerFile string,
+	footerFile string,
+	noHeader bool,
+	noFooter bool,
+) error {
 	// Copy style.css from embedded files to output directory
 	cssDst := filepath.Join(outputDir, "style.css")
 	cssIn, err := EmbeddedFiles.Open("style.css")
@@ -39,7 +51,10 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool
 
 	// Try incremental build first
 	if !noIncremental {
-		if completed, err := tryIncrementalBuild(inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned, templateOpt); err != nil {
+		if completed, err := tryIncrementalBuild(
+			inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned, templateOpt,
+			headerFile, footerFile, noHeader, noFooter,
+		); err != nil {
 			return err
 		} else if completed {
 			return nil
@@ -47,7 +62,10 @@ func BuildSite(inputDir, outputDir string, sizeThreshold int, noIncremental bool
 	}
 
 	// Fall back to full build
-	return performFullBuild(inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned, templateOpt)
+	return performFullBuild(
+		inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned, templateOpt,
+		headerFile, footerFile, noHeader, noFooter,
+	)
 }
 
 // validateInputsAndCreateOutput validates input directory and creates output directory
@@ -81,7 +99,20 @@ func logDiscoveredFiles(fileSet *FileSet) {
 }
 
 // tryIncrementalBuild attempts an incremental build, returns (completed, error)
-func tryIncrementalBuild(inputDir, outputDir string, sizeThreshold int, rssURL string, rssMaxItems int, fileSet *FileSet, startTime time.Time, keepOrphaned bool, templateOpt string) (bool, error) {
+func tryIncrementalBuild(
+	inputDir, outputDir string,
+	sizeThreshold int,
+	rssURL string,
+	rssMaxItems int,
+	fileSet *FileSet,
+	startTime time.Time,
+	keepOrphaned bool,
+	templateOpt string,
+	headerFile string,
+	footerFile string,
+	noHeader bool,
+	noFooter bool,
+) (bool, error) {
 	cachePath := getCachePath(outputDir)
 	cache, err := loadCache(cachePath)
 	if err != nil || cache.Version != 1 {
@@ -96,7 +127,52 @@ func tryIncrementalBuild(inputDir, outputDir string, sizeThreshold int, rssURL s
 	sizeOut := make(chan string, len(fileSet.MarkdownFiles))
 
 	// Process files incrementally
-	if err := builder.ProcessMarkdownFiles(fileSet.MarkdownFiles, sizeOut); err != nil {
+	// Prepare header/footer HTML
+	var headerHTML, footerHTML []byte
+	if !noHeader {
+		headerPath := headerFile
+		if headerPath == "" {
+			headerPath = filepath.Join(inputDir, "header.md")
+		}
+		if data, err := os.ReadFile(headerPath); err == nil {
+			headerHTML = SimpleMarkdownToHTML(data)
+		}
+	}
+	if !noFooter {
+		footerPath := footerFile
+		if footerPath == "" {
+			footerPath = filepath.Join(inputDir, "footer.md")
+		}
+		if data, err := os.ReadFile(footerPath); err == nil {
+			footerHTML = SimpleMarkdownToHTML(data)
+		}
+	}
+	// Filter out the actual header/footer files in use (only if injection is enabled)
+	var filteredFiles []string
+	headerBase := ""
+	footerBase := ""
+	if !noHeader {
+		if headerFile != "" {
+			headerBase = filepath.Base(headerFile)
+		} else {
+			headerBase = "header.md"
+		}
+	}
+	if !noFooter {
+		if footerFile != "" {
+			footerBase = filepath.Base(footerFile)
+		} else {
+			footerBase = "footer.md"
+		}
+	}
+	for _, f := range fileSet.MarkdownFiles {
+		base := filepath.Base(f)
+		if (headerBase != "" && base == headerBase) || (footerBase != "" && base == footerBase) {
+			continue
+		}
+		filteredFiles = append(filteredFiles, f)
+	}
+	if err := builder.ProcessMarkdownFilesWithHeaderFooter(filteredFiles, sizeOut, headerHTML, footerHTML); err != nil {
 		return false, err
 	}
 	if err := builder.ProcessAssetFiles(fileSet.AssetFiles); err != nil {
@@ -109,7 +185,7 @@ func tryIncrementalBuild(inputDir, outputDir string, sizeThreshold int, rssURL s
 	}
 
 	// Print size check results
-	for i := 0; i < len(fileSet.MarkdownFiles); i++ {
+	for i := 0; i < len(filteredFiles); i++ {
 		fmt.Fprint(os.Stderr, <-sizeOut)
 	}
 
@@ -128,7 +204,20 @@ func tryIncrementalBuild(inputDir, outputDir string, sizeThreshold int, rssURL s
 }
 
 // performFullBuild performs a complete rebuild
-func performFullBuild(inputDir, outputDir string, sizeThreshold int, rssURL string, rssMaxItems int, fileSet *FileSet, startTime time.Time, keepOrphaned bool, templateOpt string) error {
+func performFullBuild(
+	inputDir, outputDir string,
+	sizeThreshold int,
+	rssURL string,
+	rssMaxItems int,
+	fileSet *FileSet,
+	startTime time.Time,
+	keepOrphaned bool,
+	templateOpt string,
+	headerFile string,
+	footerFile string,
+	noHeader bool,
+	noFooter bool,
+) error {
 	builder := NewFullBuilder(inputDir, outputDir, sizeThreshold, templateOpt)
 
 	// Process asset files
@@ -138,12 +227,57 @@ func performFullBuild(inputDir, outputDir string, sizeThreshold int, rssURL stri
 
 	// Process markdown files
 	sizeOut := make(chan string, len(fileSet.MarkdownFiles))
-	if err := builder.ProcessMarkdownFiles(fileSet.MarkdownFiles, sizeOut); err != nil {
+	// Prepare header/footer HTML
+	var headerHTML, footerHTML []byte
+	if !noHeader {
+		headerPath := headerFile
+		if headerPath == "" {
+			headerPath = filepath.Join(inputDir, "header.md")
+		}
+		if data, err := os.ReadFile(headerPath); err == nil {
+			headerHTML = SimpleMarkdownToHTML(data)
+		}
+	}
+	if !noFooter {
+		footerPath := footerFile
+		if footerPath == "" {
+			footerPath = filepath.Join(inputDir, "footer.md")
+		}
+		if data, err := os.ReadFile(footerPath); err == nil {
+			footerHTML = SimpleMarkdownToHTML(data)
+		}
+	}
+	// Filter out the actual header/footer files in use (only if injection is enabled)
+	var filteredFiles []string
+	headerBase := ""
+	footerBase := ""
+	if !noHeader {
+		if headerFile != "" {
+			headerBase = filepath.Base(headerFile)
+		} else {
+			headerBase = "header.md"
+		}
+	}
+	if !noFooter {
+		if footerFile != "" {
+			footerBase = filepath.Base(footerFile)
+		} else {
+			footerBase = "footer.md"
+		}
+	}
+	for _, f := range fileSet.MarkdownFiles {
+		base := filepath.Base(f)
+		if (headerBase != "" && base == headerBase) || (footerBase != "" && base == footerBase) {
+			continue
+		}
+		filteredFiles = append(filteredFiles, f)
+	}
+	if err := builder.ProcessMarkdownFilesWithHeaderFooter(filteredFiles, sizeOut, headerHTML, footerHTML); err != nil {
 		return err
 	}
 
 	// Print size check results
-	for i := 0; i < len(fileSet.MarkdownFiles); i++ {
+	for i := 0; i < len(filteredFiles); i++ {
 		fmt.Fprint(os.Stderr, <-sizeOut)
 	}
 
