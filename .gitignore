@@ -33,3 +33,4 @@ go.work.sum
 
 # Ignore build(we will use release for shipping)
 colade
+colade
