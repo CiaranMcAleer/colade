@@ -39,9 +39,7 @@ func copyFilePreserveDirs(src, dst string) error {
 	return nil
 }
 
-// parseMarkdownFile is a future-proof extension point for frontmatter support.
 func parseMarkdownFile(path string) ([]byte, error) {
-	//TODO when implementing frontmatter, this will need to parse the file
 	return os.ReadFile(path)
 }
 
