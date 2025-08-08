@@ -45,9 +45,10 @@ func main() {
 			footerFile, _ := cmd.Flags().GetString("footer-file")
 			noHeader, _ := cmd.Flags().GetBool("no-header")
 			noFooter, _ := cmd.Flags().GetBool("no-footer")
+			cssFile, _ := cmd.Flags().GetString("css")
 			if err := sitegen.BuildSite(
 				inputDir, outputDir, threshold*1024, noIncremental, rssURL, rssMaxItems, keepOrphaned, templateOpt,
-				headerFile, footerFile, noHeader, noFooter,
+				headerFile, footerFile, noHeader, noFooter, cssFile,
 			); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
@@ -64,6 +65,7 @@ func main() {
 	buildCmd.Flags().String("footer-file", "", "Markdown file to use as footer (default: footer.md in inputDir)")
 	buildCmd.Flags().Bool("no-header", false, "Disable header injection")
 	buildCmd.Flags().Bool("no-footer", false, "Disable footer injection")
+	buildCmd.Flags().String("css", "", "Path to custom CSS file to use instead of the default style.css")
 
 	rootCmd.AddCommand(buildCmd)
 

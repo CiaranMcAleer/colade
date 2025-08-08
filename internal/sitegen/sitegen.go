@@ -21,16 +21,31 @@ func BuildSite(
 	footerFile string,
 	noHeader bool,
 	noFooter bool,
+	cssFile string,
 ) error {
-	// Copy style.css from embedded files to output directory
+	// Copy CSS file to output directory
 	cssDst := filepath.Join(outputDir, "style.css")
-	cssIn, err := EmbeddedFiles.Open("style.css")
-	if err == nil {
-		defer cssIn.Close()
-		cssOut, err := os.Create(cssDst)
+	if cssFile != "" {
+		// Use user-supplied CSS file
+		cssIn, err := os.Open(cssFile)
 		if err == nil {
-			defer cssOut.Close()
-			io.Copy(cssOut, cssIn)
+			defer cssIn.Close()
+			cssOut, err := os.Create(cssDst)
+			if err == nil {
+				defer cssOut.Close()
+				io.Copy(cssOut, cssIn)
+			}
+		}
+	} else {
+		// Use embedded style.css
+		cssIn, err := EmbeddedFiles.Open("style.css")
+		if err == nil {
+			defer cssIn.Close()
+			cssOut, err := os.Create(cssDst)
+			if err == nil {
+				defer cssOut.Close()
+				io.Copy(cssOut, cssIn)
+			}
 		}
 	}
 	// Validate inputs and create output directory

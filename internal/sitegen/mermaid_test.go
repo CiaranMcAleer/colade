@@ -28,7 +28,7 @@ func TestBuildSite_MermaidChart(t *testing.T) {
 	}
 
 	tplPath := "templates/default.html" // Use the default template with mermaid.js
-	err := BuildSite(inputDir, outputDir, 0, true, "", 0, false, tplPath, "", "", false, false)
+	err := BuildSite(inputDir, outputDir, 0, true, "", 0, false, tplPath, "", "", false, false, "")
 	if err != nil {
 		t.Fatalf("BuildSite failed: %v", err)
 	}

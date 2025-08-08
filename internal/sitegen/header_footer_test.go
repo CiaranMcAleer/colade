@@ -25,7 +25,7 @@ func TestHeaderFooterInjection(t *testing.T) {
 	os.WriteFile(filepath.Join(inputDir, "index.md"), []byte(pageContent), 0644)
 
 	// Use default template and build site
-	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default", "", "", false, false)
+	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default", "", "", false, false, "")
 	if err != nil {
 		t.Fatalf("BuildSite failed: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestHeaderFooterMissingFiles(t *testing.T) {
 	pageContent := "# Hello World\n\nThis is the main content."
 	os.WriteFile(filepath.Join(inputDir, "index.md"), []byte(pageContent), 0644)
 
-	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default", "", "", false, false)
+	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default", "", "", false, false, "")
 	if err != nil {
 		t.Fatalf("BuildSite failed: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestHeaderFooterInvalidMarkdown(t *testing.T) {
 	os.WriteFile(filepath.Join(inputDir, "footer.md"), []byte(">>>>>"), 0644)
 	os.WriteFile(filepath.Join(inputDir, "index.md"), []byte("# Main"), 0644)
 
-	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default", "", "", false, false)
+	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default", "", "", false, false, "")
 	if err != nil {
 		t.Fatalf("BuildSite failed: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestHeaderFooterDisabledFlags(t *testing.T) {
 	os.WriteFile(filepath.Join(inputDir, "index.md"), []byte("# Main"), 0644)
 
 	// Build with header/footer disabled
-	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default", "", "", true, true)
+	err := BuildSite(inputDir, outputDir, 14*1024, false, "", 20, false, "default", "", "", true, true, "")
 	if err != nil {
 		t.Fatalf("BuildSite failed: %v", err)
 	}
