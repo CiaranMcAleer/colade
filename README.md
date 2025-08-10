@@ -96,3 +96,8 @@ colade build input/ output/ --no-incremental
 ```
 
 - The build system maintains a `.colade-cache` file in the output directory to track file changes as part of the incremental build process.
+
+## Benchmark Coalde Performance
+```go
+go test -bench=BenchmarkSitegenPerformance ./internal/sitegen/
+```
