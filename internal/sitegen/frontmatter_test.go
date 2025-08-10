@@ -3,6 +3,7 @@
 package sitegen
 
 import (
+	"html/template"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -179,7 +180,18 @@ Content.
 						err = r.(error)
 					}
 				}()
-				err = proc.ProcessMarkdownFile(inputDir, outputDir, tc.name+".md", 1024*1024, sizeOut, nil, nil)
+				err = proc.ProcessMarkdownFile(inputDir, outputDir, tc.name+".md", 1024*1024, sizeOut, nil, nil, map[string]*template.Template{"default": template.Must(template.New("default").Parse(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ .Title }}</title>
+</head>
+<body>
+  {{ if .Title }}<h1>{{ .Title }}</h1>{{ end }}
+  {{ if .Date }}<div class="date">{{ .Date }}</div>{{ end }}
+  {{ .Content }}
+</body>
+</html>`))})
 			}()
 			htmlFile := filepath.Join(outputDir, tc.name+".html")
 			htmlBytes, htmlErr := os.ReadFile(htmlFile)

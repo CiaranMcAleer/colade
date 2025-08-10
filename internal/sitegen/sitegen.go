@@ -3,6 +3,7 @@ package sitegen
 
 import (
 	"fmt"
+	"html/template"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,7 +24,25 @@ func BuildSite(
 	noFooter bool,
 	cssFile string,
 ) error {
-	// Copy CSS file to output directory
+	// Template cache for performance
+	tmplCache := make(map[string]*template.Template)
+	tmplNames := []string{"default", "dark", "minimal"}
+	for _, name := range tmplNames {
+		tmpl, err := template.ParseFS(EmbeddedFiles, "templates/"+name+".html")
+		if err == nil {
+			tmplCache[name] = tmpl
+		}
+	}
+	// If templateOpt is a file path, load and cache it under its base name (without extension)
+	if templateOpt != "" && fileExists(templateOpt) {
+		base := filepath.Base(templateOpt)
+		name := base[:len(base)-len(filepath.Ext(base))]
+		tmpl, err := template.ParseFiles(templateOpt)
+		if err == nil {
+			tmplCache[name] = tmpl
+			templateOpt = name // Use the base name as the template key
+		}
+	} // Copy CSS file to output directory
 	cssDst := filepath.Join(outputDir, "style.css")
 	if cssFile != "" {
 		// Use user-supplied CSS file
@@ -68,7 +87,7 @@ func BuildSite(
 	if !noIncremental {
 		if completed, err := tryIncrementalBuild(
 			inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned, templateOpt,
-			headerFile, footerFile, noHeader, noFooter,
+			headerFile, footerFile, noHeader, noFooter, tmplCache,
 		); err != nil {
 			return err
 		} else if completed {
@@ -79,7 +98,7 @@ func BuildSite(
 	// Fall back to full build
 	return performFullBuild(
 		inputDir, outputDir, sizeThreshold, rssURL, rssMaxItems, fileSet, startTime, keepOrphaned, templateOpt,
-		headerFile, footerFile, noHeader, noFooter,
+		headerFile, footerFile, noHeader, noFooter, tmplCache,
 	)
 }
 
@@ -127,6 +146,7 @@ func tryIncrementalBuild(
 	footerFile string,
 	noHeader bool,
 	noFooter bool,
+	tmplCache map[string]*template.Template,
 ) (bool, error) {
 	cachePath := getCachePath(outputDir)
 	cache, err := loadCache(cachePath)
@@ -187,7 +207,7 @@ func tryIncrementalBuild(
 		}
 		filteredFiles = append(filteredFiles, f)
 	}
-	if err := builder.ProcessMarkdownFilesWithHeaderFooter(filteredFiles, sizeOut, headerHTML, footerHTML); err != nil {
+	if err := builder.ProcessMarkdownFilesWithHeaderFooter(filteredFiles, sizeOut, headerHTML, footerHTML, tmplCache); err != nil {
 		return false, err
 	}
 	if err := builder.ProcessAssetFiles(fileSet.AssetFiles); err != nil {
@@ -232,6 +252,7 @@ func performFullBuild(
 	footerFile string,
 	noHeader bool,
 	noFooter bool,
+	tmplCache map[string]*template.Template,
 ) error {
 	builder := NewFullBuilder(inputDir, outputDir, sizeThreshold, templateOpt)
 
@@ -287,7 +308,7 @@ func performFullBuild(
 		}
 		filteredFiles = append(filteredFiles, f)
 	}
-	if err := builder.ProcessMarkdownFilesWithHeaderFooter(filteredFiles, sizeOut, headerHTML, footerHTML); err != nil {
+	if err := builder.ProcessMarkdownFilesWithHeaderFooter(filteredFiles, sizeOut, headerHTML, footerHTML, tmplCache); err != nil {
 		return err
 	}
 

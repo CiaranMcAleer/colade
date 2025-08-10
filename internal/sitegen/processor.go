@@ -4,8 +4,11 @@ package sitegen
 import (
 	"bytes"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/yuin/goldmark"
@@ -48,6 +51,7 @@ func (mp *MarkdownProcessor) ProcessMarkdownFile(
 	sizeThreshold int,
 	sizeOut chan<- string,
 	headerHTML, footerHTML []byte,
+	tmplCache map[string]*template.Template,
 ) error {
 	src := filepath.Join(inputDir, relPath)
 	dst := filepath.Join(outputDir, relPath)
@@ -79,7 +83,7 @@ func (mp *MarkdownProcessor) ProcessMarkdownFile(
 		return fmt.Errorf("failed to render markdown '%s': %w", relPath, err)
 	}
 
-	htmlOut := renderHTMLPage(buf.Bytes(), mp.templateOpt, headerHTML, footerHTML, metaData)
+	htmlOut := renderHTMLPage(buf.Bytes(), mp.templateOpt, headerHTML, footerHTML, metaData, tmplCache)
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return fmt.Errorf("failed to create output dir for '%s': %w", relPath, err)
 	}
@@ -127,32 +131,72 @@ func NewIncrementalBuilder(inputDir, outputDir string, sizeThreshold int, cache 
 
 // ProcessMarkdownFiles processes all markdown files incrementally
 func (ib *IncrementalBuilder) ProcessMarkdownFilesWithHeaderFooter(
-	markdownFiles []string, sizeOut chan<- string, headerHTML, footerHTML []byte,
+	markdownFiles []string, sizeOut chan<- string, headerHTML, footerHTML []byte, tmplCache map[string]*template.Template,
 ) error {
-	for _, relPath := range markdownFiles {
-		src := filepath.Join(ib.inputDir, relPath)
-		dst := filepath.Join(ib.outputDir, relPath)
-		dst = dst[:len(dst)-len(filepath.Ext(dst))] + ".html"
-		mtime := getMtime(src)
-		ib.seen[relPath] = true
+	// Parallelized worker pool for markdown processing.
+	// This leverages all CPU cores for faster builds on large sites.
+	numWorkers := runtime.NumCPU()
+	fileCh := make(chan string, len(markdownFiles))
+	errCh := make(chan error, 1)
+	var wg sync.WaitGroup
+	var mu sync.Mutex // Protects ib.seen and ib.newCache.Files
 
-		prev, ok := ib.cache.Files[relPath]
-		if !ok || prev.Mtime != mtime {
-			fmt.Printf("[IncBuild] %s -> %s (changed/new)\n", relPath, dst)
-			if err := ib.processor.ProcessMarkdownFile(ib.inputDir, ib.outputDir, relPath, ib.sizeThreshold, sizeOut, headerHTML, footerHTML); err != nil {
-				return err
+	// Launch workers
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for relPath := range fileCh {
+				src := filepath.Join(ib.inputDir, relPath)
+				dst := filepath.Join(ib.outputDir, relPath)
+				dst = dst[:len(dst)-len(filepath.Ext(dst))] + ".html"
+				mtime := getMtime(src)
+				mu.Lock()
+				ib.seen[relPath] = true
+				mu.Unlock()
+
+				prev, ok := ib.cache.Files[relPath]
+				if !ok || prev.Mtime != mtime {
+					fmt.Printf("[IncBuild] %s -> %s (changed/new)\n", relPath, dst)
+					if err := ib.processor.ProcessMarkdownFile(ib.inputDir, ib.outputDir, relPath, ib.sizeThreshold, sizeOut, headerHTML, footerHTML, tmplCache); err != nil {
+						select {
+						case errCh <- err:
+						default:
+						}
+						return
+					}
+				} else {
+					fmt.Printf("[IncBuild] %s unchanged, skipping\n", relPath)
+					sizeOut <- ""
+				}
+				outputPath, err := filepath.Rel(ib.outputDir, dst)
+				if err != nil {
+					select {
+					case errCh <- fmt.Errorf("failed to get relative path: %w", err):
+					default:
+					}
+					return
+				}
+				mu.Lock()
+				ib.newCache.Files[relPath] = cacheFileEntry{Mtime: mtime, Output: outputPath}
+				mu.Unlock()
 			}
-		} else {
-			fmt.Printf("[IncBuild] %s unchanged, skipping\n", relPath)
-			sizeOut <- ""
-		}
-		outputPath, err := filepath.Rel(ib.outputDir, dst)
-		if err != nil {
-			return fmt.Errorf("failed to get relative path: %w", err)
-		}
-		ib.newCache.Files[relPath] = cacheFileEntry{Mtime: mtime, Output: outputPath}
+		}()
 	}
-	return nil
+
+	// Feed file paths to workers
+	for _, relPath := range markdownFiles {
+		fileCh <- relPath
+	}
+	close(fileCh)
+	wg.Wait()
+
+	select {
+	case err := <-errCh:
+		return err
+	default:
+		return nil
+	}
 }
 
 // ProcessAssetFiles processes all asset files incrementally
@@ -232,13 +276,13 @@ func (fb *FullBuilder) ProcessAssetFiles(assetFiles []string) error {
 
 // ProcessMarkdownFiles processes all markdown files in full build mode
 func (fb *FullBuilder) ProcessMarkdownFilesWithHeaderFooter(
-	markdownFiles []string, sizeOut chan<- string, headerHTML, footerHTML []byte,
+	markdownFiles []string, sizeOut chan<- string, headerHTML, footerHTML []byte, tmplCache map[string]*template.Template,
 ) error {
 	for _, relPath := range markdownFiles {
 		opStart := time.Now()
 		fmt.Printf("[Build]  %s -> %s\n", relPath, filepath.Join(fb.outputDir, relPath[:len(relPath)-len(filepath.Ext(relPath))]+".html"))
 
-		if err := fb.processor.ProcessMarkdownFile(fb.inputDir, fb.outputDir, relPath, fb.sizeThreshold, sizeOut, headerHTML, footerHTML); err != nil {
+		if err := fb.processor.ProcessMarkdownFile(fb.inputDir, fb.outputDir, relPath, fb.sizeThreshold, sizeOut, headerHTML, footerHTML, tmplCache); err != nil {
 			return err
 		}
 		fmt.Printf("[Build]  Done in %v\n", time.Since(opStart))
