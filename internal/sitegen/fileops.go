@@ -48,29 +48,19 @@ func parseMarkdownFile(path string) ([]byte, error) {
 }
 
 // renderHTMLPage is a future-proof extension point for templating support.
-func renderHTMLPage(html []byte, templateOpt string, headerHTML, footerHTML []byte, meta map[string]interface{}) []byte {
-	// Determine template path
-	var templatePath string
-	if templateOpt != "" {
-		if _, err := os.Stat(templateOpt); err == nil {
-			templatePath = templateOpt
-		} else if filepath.IsAbs(templateOpt) || filepath.Ext(templateOpt) == ".html" {
-			templatePath = templateOpt
-		} else {
-			templatePath = "templates/" + templateOpt + ".html"
-		}
-	} else {
-		templatePath = "templates/default.html"
+// Uses a template cache for performance; see sitegen.go for cache creation.
+func renderHTMLPage(html []byte, templateOpt string, headerHTML, footerHTML []byte, meta map[string]interface{}, tmplCache map[string]*template.Template) []byte {
+	// Use cached template for performance
+	tmplName := templateOpt
+	if tmplName == "" {
+		tmplName = "default"
 	}
-	var tmpl *template.Template
-	var err error
-	if filepath.IsAbs(templatePath) || fileExists(templatePath) {
-		tmpl, err = template.ParseFiles(templatePath)
-	} else {
-		tmpl, err = template.ParseFS(EmbeddedFiles, templatePath)
+	tmpl, ok := tmplCache[tmplName]
+	if !ok {
+		tmpl = tmplCache["default"]
 	}
-	if err != nil {
-		return html
+	if tmpl == nil {
+		return html // fallback: return raw HTML if no template found
 	}
 
 	// Flatten common meta fields for easier template access
